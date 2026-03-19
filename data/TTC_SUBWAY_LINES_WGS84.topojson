@@ -29,15 +29,6 @@
         },
         {
           "type": "LineString",
-          "arcs": [6, 7, 8],
-          "properties": {
-            "OBJECTID": 53422,
-            "ROUTE_NAME": "LINE 3 (SCARBOROUGH)",
-            "RID": 3
-          }
-        },
-        {
-          "type": "LineString",
           "arcs": [9],
           "properties": {
             "OBJECTID": 53423,

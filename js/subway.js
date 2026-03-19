@@ -1,3 +1,40 @@
+const VALID_LINE1_STATIONS = [
+    "BLOOR STATION", "CEDARVALE YU STATION", "COLLEGE STATION", "DAVISVILLE STATION", 
+    "DOWNSVIEW PARK STATION", "TMU STATION", "DUPONT STATION", "EGLINTON STATION", 
+    "FINCH STATION", "FINCH WEST STATION", "GLENCAIRN STATION", "HIGHWAY 407 STATION", 
+    "KING STATION", "LAWRENCE STATION", "LAWRENCE WEST STATION",
+    "MUSEUM STATION", "NORTH YORK CTR STATION", "OSGOODE STATION", "QUEEN'S PARK STATION",
+    "QUEEN STATION", "ROSEDALE STATION", "SHEPPARD WEST STATION", "SHEPPARD-YONGE STATION",
+    "SPADINA STATION", "ST ANDREW STATION", "ST CLAIR STATION", "ST CLAIR WEST STATION",
+    "ST GEORGE STATION", "UNION STATION", "VMC STATION", "WELLESLEY STATION", "WILSON STATION",
+    "YORK MILLS STATION", "YORKDALE STATION", "SUMMERHILL STATION", "YORK UNIVERSITY STATIO",
+    "PIONEER VILLAGE STATIO", "ST PATRICK STATION"
+];
+
+const VALID_LINE2_STATIONS = [
+    "BATHURST STATION", "BAY STATION", "BLOOR STATION", "BROADVIEW STATION",
+    "CASTLE FRANK STATION", "CHESTER STATION", "CHRISTIE STATION", "COXWELL STATION",
+    "DONLANDS STATION", "DUFFERIN STATION", "DUNDAS WEST STATION", "GREENWOOD STATION",
+    "HIGH PARK STATION", "JANE STATION", "KEELE STATION", "KENNEDY STATION", "KIPLING STATION",
+    "LANSDOWNE STATION", "MAIN STREET STATION", "OLD MILL STATION", "OSSINGTON STATION",
+    "PAPE STATION", "ROYAL YORK STATION", "RUNNYMEDE STATION", "SHERBOURNE STATION",
+    "SPADINA STATION", "ST GEORGE STATION", "VICTORIA PARK STATION",
+    "WARDEN STATION", "WOODBINE STATION", "ISLINGTON STATION"
+];
+
+const VALID_LINE4_STATIONS = [
+    "BAYVIEW STATION", "BESSARION STATION", "DON MILLS STATION", "LESLIE STATION", 
+    "SHEPPARD-YONGE STATION"
+];
+
+const RENAMED_STATIONS = {
+  "DUNDAS STATION": "TMU STATION",
+  "EGLINTON WEST STATION": "CEDARVALE YU STATION",
+  "ST GEORGE YUS STATION": "ST GEORGE STATION",
+  "ST GEORGE BD STATION": "ST GEORGE STATION",
+  "VAUGHAN MC STATION": "VMC STATION"
+};
+
 Subway = function (_parentElement, _subwayDelayData, _codeDescriptions, _topoSubway, 
                     _topoToronto, _stationCoords) {
     this.parentElement = _parentElement;
@@ -6,6 +43,13 @@ Subway = function (_parentElement, _subwayDelayData, _codeDescriptions, _topoSub
     this.topoSubway = _topoSubway;
     this.topoToronto = _topoToronto;
     this.stationCoords = _stationCoords;
+
+    this.allValidStations = new Set([
+        ...VALID_LINE1_STATIONS,
+        ...VALID_LINE2_STATIONS,
+        ...VALID_LINE4_STATIONS]);
+    
+    this.stationData = [];
 
     this.initVis();
 };
@@ -20,7 +64,7 @@ Subway.prototype.initVis = function () {
 
     vis.margin = { top: 20, right: 20, bottom: 20, left: 20 };
     vis.height = 1000;
-    vis.width = 1000;
+    vis.width = 1500;
 
     vis.svg = d3.select("#" + vis.parentElement).append("svg")
         .attr("width", vis.width)
@@ -80,41 +124,15 @@ Subway.prototype.initVis = function () {
             }
         })
         .attr("stroke-width", 10);
-
+    
     // append tooltip
-        vis.tooltip = d3.select("body").append('div')
-            .attr('class', "tooltip")
-            .attr('id', 'stationTooltip');
+    vis.tooltip = d3.select("body").append('div')
+        .attr('class', "tooltip")
+        .attr('id', 'stationTooltip');
         
-    // draw subway station circles
-    vis.svg.append("g")
-        .selectAll("circle")
-        .data(vis.stationCoords)
-        .enter()
-        .append("circle")
-        .attr("cx", d => vis.projection([d.stop_lon, d.stop_lat])[0])
-        .attr("cy", d => vis.projection([d.stop_lon, d.stop_lat])[1])
-        .attr("r", 5)
-        .on('mouseover', function(event, d){
-                vis.tooltip
-                    .style("opacity", 1)
-                    .style("left", event.pageX + 20 + "px")
-                    .style("top", event.pageY + "px")
-                    .html(`
-                        <div style="border: thin solid grey; border-radius: 5px; background: lightgrey; padding: 20px">
-                            <h3>${d.stop_name}<h3>                    
-                        </div>`);
-            }).on('mouseout', function(event, d){
-                vis.tooltip
-                    .style("opacity", 0)
-                    .style("left", 0)
-                    .style("top", 0)
-                    .html(``);
-            });
-
 
     
-    // TODO vis.wrangleData();
+    vis.wrangleData();
 };
 
 
@@ -125,28 +143,47 @@ Subway.prototype.initVis = function () {
 Subway.prototype.wrangleData = function () {
     var vis = this;
 
-    vis.dataMarriages.forEach((d, i) => {
-        let totalMarriages = d.filter(x => x === 1).length;
-        let totalBusiness = vis.dataBusiness[i].filter(x => x === 1).length;
+    console.log(vis.allValidStations);
+    
+    // remove rows without valid station names
+    let cleanedDelays = vis.subwayDelayData
+                        .filter(d => d.Station && d.Station !== "None")
+                        .filter(d => vis.allValidStations.has(renameInvalidStations( d.Station)));
+    
+    // map station names to coords
+    let stopMap = new Map(vis.stationCoords.map(d => [
+                            d.stop_name,
+                            {
+                                lat: +d.stop_lat,
+                                lon: +d.stop_lon,
+                                name: d.stop_name
+                            }
+                        ]));
 
-        let family = {
-            "index": i,
-            "name": vis.dataFamilyAttributes[i].Family,
-            "allRelations": totalBusiness + totalMarriages,
-            "businessTies": totalBusiness,
-            "businessValues": vis.dataBusiness[i],
-            "marriages": totalMarriages,
-            "marriageValues": d,
-            "numberPriorates": vis.dataFamilyAttributes[i].NumberPriorates,
-            "wealth": vis.dataFamilyAttributes[i].Wealth
-        };
+    // aggregate per station
+    let stationStats = d3.rollup(cleanedDelays, v => ({
+                                    frequency: v.length, // number of delays
+                                    avgDelay: d3.mean(v, d => +d["Min Delay"]) // delay length
+                                }),
+                                d => d.Station
+                            );
 
-        vis.displayData.push(family);
+    // merge station data
+    stationStats.forEach((stats, stationKey) => {
+        const coord = stopMap.get(stationKey);
 
+        if (coord) {
+            vis.stationData.push({
+                station: coord.name,
+                lat: coord.lat,
+                lon: coord.lon,
+                frequency: stats.frequency,
+                avgDelay: stats.avgDelay
+            });
+        }
     });
 
-    console.log(vis.displayData);
-    vis.updateVis("name");
+    vis.updateVis();
 };
 
 
@@ -154,90 +191,67 @@ Subway.prototype.wrangleData = function () {
  * The drawing function
  */
 
-Subway.prototype.updateVis = function (orderingType) {
+Subway.prototype.updateVis = function () {
     var vis = this;
 
-    // Update sorting
-    // TODO: Implement
-    if (orderingType === "name"){
-        vis.displayData.sort((a,b)=>d3.ascending(a.name, b.name));
-    } else if (orderingType === "numRelations"){
-        vis.displayData.sort((a,b)=>d3.ascending(a.allRelations, b.allRelations));
-    } else if (orderingType === "numBusiness"){
-        vis.displayData.sort((a,b)=>d3.ascending(a.businessTies, b.businessTies));
-    } else if (orderingType === "numMarriages"){
-        vis.displayData.sort((a,b)=>d3.ascending(a.marriages, b.marriages));
-    } else if (orderingType === "wealth"){
-        vis.displayData.sort((a,b)=>b.wealth - a.wealth);
-    } else { //if (orderingType === "priorates"){
-        vis.displayData.sort((a,b)=>b.priorates - a.priorates);
-    }
+    // station circle colour scale
+    const colorScale = d3.scaleSequential()
+                        .domain([d3.max(vis.stationData, d => d.avgDelay), 0])
+                        .interpolator(d3.interpolateRdYlGn)
+                        .clamp(true);
+    
+    const sizeScale = d3.scaleSqrt()
+                        .domain([0, d3.max(vis.stationData, d => d.frequency)])
+                        .range([3, 15]);
 
-
-    // Draw matrix rows (and y-axis labels)
-    // TODO: Implement
-    let dataJoin = vis.svg.selectAll(".matrix-row")
-                        .data(vis.displayData, d => d.name);
-
-    // ENTER
-    var rowsGroups = dataJoin.enter()
-        .append("g")
-        .attr("class", "matrix-row");
-
-    // ENTER
-    rowsGroups.append("text")
-        .attr("class", "matrix-label matrix-row-label")
-        .attr("x", -10)
-        .attr("y", vis.cellHeight / 2)
-        .attr("dy", ".35em")
-        .attr("text-anchor", "end")
-        .text(function (d, index) {
-            return d.name;
-        })
-        .merge(dataJoin.select(".matrix-row-label"));   // merge ENTER + UPDATE (row labels)
-
-    rowsGroups.merge(dataJoin)  // merge ENTER + UPDATE groups
-        .style('opacity', 0.5)
-        .transition()
-        .duration(1000)
-        .style('opacity', 1)
-        .attr("transform", (d, i) => "translate(0," + (vis.cellHeight + vis.cellPadding) * i + ")");
-
-
-    // Draw marriage triangles
-    // TODO: Implement
-    rowsGroups.selectAll(".matrix-cell-marriage")
-        .data(d => d.marriageValues)
+    // draw subway station circles
+    vis.svg.append("g")
+        .selectAll("circle")
+        .data(vis.stationData)
         .enter()
-        .append("path")
-        .attr("class", "matrix-cell-marriage")
-        .attr("d", (d, j) => {
-            let c = j * (vis.cellWidth + vis.cellPadding);
-            return `M ${c} 0 L ${c + vis.cellWidth} 0 L ${c + vis.cellWidth} ${vis.cellHeight} Z`;
-        })
-        .attr("fill", d => d === 1 ? "yellow" : "none");
+        .append("circle")
+        .attr("cx", d => vis.projection([d.lon, d.lat])[0])
+        .attr("cy", d => vis.projection([d.lon, d.lat])[1])
+        .attr("r", d => sizeScale(d.frequency))
+        .attr("fill", d => colorScale(d.avgDelay))
+        .attr("stroke", "black")
+        .attr("stroke-width", 0.5)
+        .attr("opacity", 0.8)
+        .on('mouseover', function(event, d){
+                vis.tooltip
+                    .style("opacity", 1)
+                    .style("left", event.pageX + 20 + "px")
+                    .style("top", event.pageY + "px")
+                    .html(`
+                        <div style="border: thin solid grey; border-radius: 5px; background: lightgrey; padding: 20px">
+                            <p>${readifyStationName(d.station)}<p>
+                            <p>Average Delay Duration (mins): ${d.avgDelay}<p>   
+                            <p>Average Delay Frequency: ${d.frequency}<p>                   
+                        </div>`);
+            }).on('mouseout', function(event, d){
+                vis.tooltip
+                    .style("opacity", 0)
+                    .style("left", 0)
+                    .style("top", 0)
+                    .html(``);
+            });
 
-
-    // Draw business triangles
-    // TODO: Implement
-    rowsGroups.selectAll(".matrix-cell-business")
-        .data(d => d.businessValues)
-        .enter()
-        .append("path")
-        .attr("class", "matrix-cell-business")
-        .attr("d", (d, j) => {
-            let c = j * (vis.cellWidth + vis.cellPadding);
-            return `M ${c} ${vis.cellHeight} L ${c + vis.cellWidth} ${vis.cellHeight} L ${c} 0 Z`;
-        })
-        .attr("fill", d => d === 1 ? "purple" : "none");
-
-    // Draw x-axis labels
-    // TODO: Implement
-    let xAxis = vis.svg.selectAll(".matrix-col-label")
-                    .data(vis.displayData);
-    xAxis.enter().append("text")
-        .attr("class","matrix-label matrix-col-label")
-        .attr("transform", (d, i) => `translate(${i*(vis.cellWidth+vis.cellPadding)+vis.cellWidth/2}, -10) rotate(-90)`)
-        .attr("text-anchor","start")
-        .text(d=>d.name);
 };
+
+function renameInvalidStations(name) {
+    return RENAMED_STATIONS[name] || name;
+}
+
+function readifyStationName(name) {
+    let cleanedName= name
+                .replace("STATION", "")
+                .replace("STATIO", "")
+                .replace(".", "");
+    
+    // dataset specific cleaning
+    return cleanedName
+            .replace("CTR", "CENTRE")
+            .replace("VMC", "VAUGHAN METROPOLITAN CENTRE")
+            .trim();
+
+}

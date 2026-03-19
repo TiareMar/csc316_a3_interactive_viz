@@ -1,6 +1,5 @@
 var subway;
 
-
 // TODO: Load data 
 let promises = [
     d3.csv("data/ttc-subway-delay-data-since-2025.csv"),
@@ -21,8 +20,9 @@ function initMainPage(data) {
     let topoToronto = data[3];
     let stationCoords = data[4];
 
-    subway = new Subway("chart-area", subwayDelayData, codeDescriptions, topoSubway,
-                        topoToronto, stationCoords); 
+    subway = new Subway("chart-area", subwayDelayData, codeDescriptions, topoSubway, topoToronto,
+                    stationCoords, VALID_LINE1_STATIONS, VALID_LINE2_STATIONS, VALID_LINE4_STATIONS,
+                    RENAMED_STATIONS); 
 }
 
 
