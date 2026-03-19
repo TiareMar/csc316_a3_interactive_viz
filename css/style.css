@@ -14,3 +14,18 @@ path {
 #select-order-type {
 	width: 200px;
 }
+
+.title {
+  font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+  font-size: 26px;
+  font-weight: 600;
+  fill: #222;
+  text-anchor: middle;
+}
+
+.subtitle {
+  font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  fill: #666;
+  text-anchor: middle;
+}

@@ -78,7 +78,16 @@ Subway.prototype.initVis = function () {
             .attr('id', 'map-title')
             .append('text')
             .text('When and Where is the TTC the most UNRELIABLE?')
-            .attr('transform', `translate(${vis.width / 2}, 20)`)
+            .attr('transform', `translate(350, 100)`)
+            .attr('text-anchor', 'middle');
+
+    // add subtitle
+    vis.svg.append('g')
+            .attr('class', 'subtitle')
+            .attr('id', 'map-title')
+            .append('text')
+            .text('Station circle size is delay frequency, and colour is avg. delay duration (red = longer)')
+            .attr('transform', `translate(350, 120)`)
             .attr('text-anchor', 'middle');
 
     // convert topoJSON data to geoJSON data structure
@@ -150,7 +159,7 @@ Subway.prototype.initVis = function () {
     vis.sliderHandle = vis.svg.append("circle")
                         .attr("cx", vis.timeScale(1))
                         .attr("cy", vis.height - 50)
-                        .attr("r", 8)
+                        .attr("r", 20)
                         .attr("fill", "black")
                         .call(d3.drag().on("drag", function(event) {
                             let x = Math.max(100, Math.min(vis.width - 100, event.x));
@@ -158,18 +167,26 @@ Subway.prototype.initVis = function () {
 
                             let selectedTime = Math.round(vis.timeScale.invert(x));
                             console.log("Selected time:", selectedTime);
-                            vis.timeLabel.text(formatTime(selectedTime));
+                            vis.timeLabel
+                                .attr("x", x)
+                                .attr("y", vis.height - 90)
+                                .text(formatTime(selectedTime));
                             vis.updateTimeFilter(selectedTime);
                         }))
                         .on("mouseover", function() {
-                            d3.select(this).attr("r", 12);
+                            d3.select(this).attr("r", 25);
                         })
                         .on("mouseout", function() {
-                            d3.select(this).attr("r", 8);
+                            d3.select(this).attr("r", 20);
                         });
     
     // label for weekday and time
-    vis.timeLabel = vis.svg.append("text").attr("y", 50);
+    vis.timeLabel = vis.svg.append("text")
+                        .attr("x", vis.timeScale(1))
+                        .attr("y", vis.height - 90)
+                        .attr("class", "subtitle")
+                        .attr("text-anchor", "middle")
+                        .text(formatTime(1));
     
     // append tooltip
     vis.tooltip = d3.select("body").append('div')
