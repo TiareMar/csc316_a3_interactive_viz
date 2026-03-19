@@ -73,7 +73,13 @@ Subway.prototype.initVis = function () {
         .attr("transform", `translate(${vis.margin.left},${vis.margin.top})`);
     
     // add title
-    // TODO
+    vis.svg.append('g')
+            .attr('class', 'title')
+            .attr('id', 'map-title')
+            .append('text')
+            .text('When and Where is the TTC the most UNRELIABLE?')
+            .attr('transform', `translate(${vis.width / 2}, 20)`)
+            .attr('text-anchor', 'middle');
 
     // convert topoJSON data to geoJSON data structure
     vis.toronto = topojson.feature(vis.topoToronto, vis.topoToronto.objects.toronto);
@@ -124,6 +130,46 @@ Subway.prototype.initVis = function () {
             }
         })
         .attr("stroke-width", 10);
+
+    // for stations circles
+    vis.stationLayer = vis.svg.append("g");
+
+    // FOR WEEK DAY + TIME FILTERING
+    vis.timeScale = d3.scaleLinear()
+                    .domain([0, 168])
+                    .range([100, vis.width - 100]);
+    // slider track line
+    vis.sliderTrack = vis.svg.append("line")
+                        .attr("x1", 100)
+                        .attr("x2", vis.width - 100)
+                        .attr("y1", vis.height - 50)
+                        .attr("y2", vis.height - 50)
+                        .attr("stroke", "black")
+                        .attr("stroke-width", 2);
+    // draggable circle for weekday
+    vis.sliderHandle = vis.svg.append("circle")
+                        .attr("cx", vis.timeScale(1))
+                        .attr("cy", vis.height - 50)
+                        .attr("r", 8)
+                        .attr("fill", "black")
+                        .call(d3.drag().on("drag", function(event) {
+                            let x = Math.max(100, Math.min(vis.width - 100, event.x));
+                            d3.select(this).attr("cx", x);
+
+                            let selectedTime = Math.round(vis.timeScale.invert(x));
+                            console.log("Selected time:", selectedTime);
+                            vis.timeLabel.text(formatTime(selectedTime));
+                            vis.updateTimeFilter(selectedTime);
+                        }))
+                        .on("mouseover", function() {
+                            d3.select(this).attr("r", 12);
+                        })
+                        .on("mouseout", function() {
+                            d3.select(this).attr("r", 8);
+                        });
+    
+    // label for weekday and time
+    vis.timeLabel = vis.svg.append("text").attr("y", 50);
     
     // append tooltip
     vis.tooltip = d3.select("body").append('div')
@@ -145,35 +191,64 @@ Subway.prototype.wrangleData = function () {
 
     console.log(vis.allValidStations);
     
-    // remove rows without valid station names
-    let cleanedDelays = vis.subwayDelayData
+    let dayIndex = {
+        "Monday": 0,
+        "Tuesday": 1,
+        "Wednesday": 2,
+        "Thursday": 3,
+        "Friday": 4,
+        "Saturday": 5,
+        "Sunday": 6
+    };
+    vis.cleanedDelays = vis.subwayDelayData
                         .filter(d => d.Station && d.Station !== "None")
-                        .filter(d => vis.allValidStations.has(renameInvalidStations( d.Station)));
+                        // remove rows without valid station names
+                        .filter(d => vis.allValidStations.has(renameInvalidStations(d.Station)))
+                        .map(d => {
+                            // and add filterable time data
+                            let [hour, min] = d.Time.split(":").map(Number);
+                            let hourDecimal = hour + min / 60;
+
+                            return {
+                            ...d,
+                            Station: readifyStationName(d.Station),
+                            timeIndex: dayIndex[d.Day] * 24 + hourDecimal
+                            };
+                        });
     
     // map station names to coords
-    let stopMap = new Map(vis.stationCoords.map(d => [
-                            d.stop_name,
-                            {
-                                lat: +d.stop_lat,
-                                lon: +d.stop_lon,
-                                name: d.stop_name
-                            }
-                        ]));
+    vis.stopMap = new Map(vis.stationCoords.map(d => [
+        readifyStationName(d.stop_name),
+        {
+            lat: +d.stop_lat,
+            lon: +d.stop_lon,
+            name: d.stop_name
+        }
+    ]));
+
+    vis.stationData = vis.aggregateData(vis.cleanedDelays);
+    vis.updateVis();
+};
+
+Subway.prototype.aggregateData = function(data) {
+    var vis = this;
+
+    let result = [];
 
     // aggregate per station
-    let stationStats = d3.rollup(cleanedDelays, v => ({
-                                    frequency: v.length, // number of delays
-                                    avgDelay: d3.mean(v, d => +d["Min Delay"]) // delay length
-                                }),
-                                d => d.Station
-                            );
+    let stationStats = d3.rollup(data, v => ({
+            frequency: v.length, // number of delays
+            avgDelay: d3.mean(v, d => +d["Min Delay"]) // delay length
+        }),
+        d => d.Station
+    );
 
     // merge station data
     stationStats.forEach((stats, stationKey) => {
-        const coord = stopMap.get(stationKey);
+        const coord = vis.stopMap.get(stationKey);
 
         if (coord) {
-            vis.stationData.push({
+            result.push({
                 station: coord.name,
                 lat: coord.lat,
                 lon: coord.lon,
@@ -183,60 +258,99 @@ Subway.prototype.wrangleData = function () {
         }
     });
 
-    vis.updateVis();
+    return result;
 };
-
 
 /*
  * The drawing function
  */
-
 Subway.prototype.updateVis = function () {
     var vis = this;
 
+    console.log("stationData length:", vis.stationData.length);
+
     // station circle colour scale
-    const colorScale = d3.scaleSequential()
+    vis.colorScale = d3.scaleSequential()
                         .domain([d3.max(vis.stationData, d => d.avgDelay), 0])
                         .interpolator(d3.interpolateRdYlGn)
                         .clamp(true);
     
-    const sizeScale = d3.scaleSqrt()
+    vis.sizeScale = d3.scaleSqrt()
                         .domain([0, d3.max(vis.stationData, d => d.frequency)])
                         .range([3, 15]);
 
     // draw subway station circles
-    vis.svg.append("g")
-        .selectAll("circle")
-        .data(vis.stationData)
-        .enter()
-        .append("circle")
-        .attr("cx", d => vis.projection([d.lon, d.lat])[0])
-        .attr("cy", d => vis.projection([d.lon, d.lat])[1])
-        .attr("r", d => sizeScale(d.frequency))
-        .attr("fill", d => colorScale(d.avgDelay))
-        .attr("stroke", "black")
-        .attr("stroke-width", 0.5)
-        .attr("opacity", 0.8)
-        .on('mouseover', function(event, d){
-                vis.tooltip
-                    .style("opacity", 1)
-                    .style("left", event.pageX + 20 + "px")
-                    .style("top", event.pageY + "px")
-                    .html(`
-                        <div style="border: thin solid grey; border-radius: 5px; background: lightgrey; padding: 20px">
-                            <p>${readifyStationName(d.station)}<p>
-                            <p>Average Delay Duration (mins): ${d.avgDelay}<p>   
-                            <p>Average Delay Frequency: ${d.frequency}<p>                   
-                        </div>`);
-            }).on('mouseout', function(event, d){
-                vis.tooltip
-                    .style("opacity", 0)
-                    .style("left", 0)
-                    .style("top", 0)
-                    .html(``);
-            });
+    const circles = vis.stationLayer
+                        .selectAll("circle")
+                        .data(vis.stationData, d => d.station);
+
+    // ENTER
+    const circlesEnter = circles.enter()
+                            .append("circle")
+                            .attr("cx", d => vis.projection([d.lon, d.lat])[0])
+                            .attr("cy", d => vis.projection([d.lon, d.lat])[1])
+                            .attr("stroke", "black")
+                            .attr("stroke-width", 0.5)
+                            .attr("opacity", 0.8);
+
+    // ENTER + UPDATE
+    circlesEnter.merge(circles)
+                .on('mouseover', function(event, d) {
+                    vis.tooltip
+                        .style("opacity", 1)
+                        .html(`
+                        <div style="border:1px solid grey; border-radius:5px; background:white; padding:8px">
+                            <strong>${readifyStationName(d.station)}</strong><br/>
+                            Avg Delay: ${d.avgDelay.toFixed(1)} min<br/>
+                            Frequency: ${d.frequency}
+                        </div>
+                        `);
+                })
+                .on('mousemove', function(event) {
+                    vis.tooltip
+                        .style("left", (event.pageX + 15) + "px")
+                        .style("top", (event.pageY + 15) + "px");
+                })
+                .on('mouseout', function() {
+                    vis.tooltip.style("opacity", 0);
+                })
+                .transition()
+                .duration(0)
+                .attr("r", d => vis.sizeScale(d.frequency))
+                .attr("fill", d => vis.colorScale(d.avgDelay));
+
+    // EXIT
+    circles.exit().remove();
 
 };
+
+Subway.prototype.filterData = function(selectedTime) {
+    var vis = this;
+
+    const windowSize = 2;
+
+    return vis.cleanedDelays.filter(d => {
+        let diff = Math.abs(d.timeIndex - selectedTime);
+        diff = Math.min(diff, 168 - diff); // wrap around week
+        return diff <= windowSize;
+    });
+};
+
+Subway.prototype.updateTimeFilter = function(selectedTime) {
+    var vis = this;
+
+    const filtered = vis.filterData(selectedTime);
+    vis.stationData = vis.aggregateData(filtered);
+
+    console.log("Filtered size:", filtered.length);
+
+    // update scales dynamically
+    vis.colorScale.domain([d3.max(vis.stationData, d => d.avgDelay),0]);
+    vis.sizeScale.domain([0,d3.max(vis.stationData, d => d.frequency)]);
+
+    vis.updateVis();
+};
+
 
 function renameInvalidStations(name) {
     return RENAMED_STATIONS[name] || name;
@@ -254,4 +368,13 @@ function readifyStationName(name) {
             .replace("VMC", "VAUGHAN METROPOLITAN CENTRE")
             .trim();
 
+}
+
+function formatTime(t) {
+    const day = Math.floor(t / 24);
+    const hour = Math.floor(t % 12);
+
+    const days = ["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"];
+
+    return `${days[day]} ${hour}:00 ${(t % 24 > 12) ? "PM" : "AM"}`;
 }
