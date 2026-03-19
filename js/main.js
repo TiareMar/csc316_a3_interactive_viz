@@ -1,4 +1,4 @@
-var matrix;
+var subway;
 
 
 // TODO: Load data 
@@ -6,7 +6,8 @@ let promises = [
     d3.csv("data/ttc-subway-delay-data-since-2025.csv"),
     d3.csv("data/code-descriptions.csv"),
     d3.json("data/TTC_SUBWAY_LINES_WGS84.topojson"),
-    d3.json("data/toronto_topo.json")
+    d3.json("data/toronto_topo.json"),
+    d3.csv("data/station-coordinates.csv")
 ];
 
 Promise.all(promises)
@@ -18,8 +19,10 @@ function initMainPage(data) {
     let codeDescriptions = data[1];
     let topoSubway = data[2];
     let topoToronto = data[3];
+    let stationCoords = data[4];
 
-    subway = new Subway("chart-area", subwayDelayData, codeDescriptions, topoSubway, topoToronto); 
+    subway = new Subway("chart-area", subwayDelayData, codeDescriptions, topoSubway,
+                        topoToronto, stationCoords); 
 }
 
 

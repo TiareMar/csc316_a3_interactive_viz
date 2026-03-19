@@ -1,9 +1,11 @@
-Subway = function (_parentElement, _subwayDelayData, _codeDescriptions, _topoSubway, _topoToronto) {
+Subway = function (_parentElement, _subwayDelayData, _codeDescriptions, _topoSubway, 
+                    _topoToronto, _stationCoords) {
     this.parentElement = _parentElement;
     this.subwayDelayData = _subwayDelayData;
     this.codeDescriptions = _codeDescriptions;
     this.topoSubway = _topoSubway;
     this.topoToronto = _topoToronto;
+    this.stationCoords = _stationCoords;
 
     this.initVis();
 };
@@ -78,6 +80,38 @@ Subway.prototype.initVis = function () {
             }
         })
         .attr("stroke-width", 10);
+
+    // append tooltip
+        vis.tooltip = d3.select("body").append('div')
+            .attr('class', "tooltip")
+            .attr('id', 'stationTooltip');
+        
+    // draw subway station circles
+    vis.svg.append("g")
+        .selectAll("circle")
+        .data(vis.stationCoords)
+        .enter()
+        .append("circle")
+        .attr("cx", d => vis.projection([d.stop_lon, d.stop_lat])[0])
+        .attr("cy", d => vis.projection([d.stop_lon, d.stop_lat])[1])
+        .attr("r", 5)
+        .on('mouseover', function(event, d){
+                vis.tooltip
+                    .style("opacity", 1)
+                    .style("left", event.pageX + 20 + "px")
+                    .style("top", event.pageY + "px")
+                    .html(`
+                        <div style="border: thin solid grey; border-radius: 5px; background: lightgrey; padding: 20px">
+                            <h3>${d.stop_name}<h3>                    
+                        </div>`);
+            }).on('mouseout', function(event, d){
+                vis.tooltip
+                    .style("opacity", 0)
+                    .style("left", 0)
+                    .style("top", 0)
+                    .html(``);
+            });
+
 
     
     // TODO vis.wrangleData();
