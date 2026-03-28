@@ -54,3 +54,13 @@ path {
   fill: black;
   text-anchor: middle;
 }
+
+.reset-button {
+  padding: "6px 12px";
+  font-size: 12px;
+  border-radius: 6px;
+  border: none;
+  background-color: #333;
+  color: white;
+  cursor: pointer;
+}

@@ -28,10 +28,26 @@ Causes.prototype.initVis = function() {
         .attr("font-size", "14px")
         .attr("font-weight", "bold")
         .text("Top 5 Delay Causes");
+
+    // error message
+    vis.errorMessage = vis.svg.append("text")
+        .attr("x", vis.width / 2)
+        .attr("y", 70)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "10px")
+        .attr("fill", "#333")
+        .attr("opacity", 0)
+        .text("No delays to show for this station.");
 };
 
 Causes.prototype.updateVis = function(data) {
     var vis = this;
+
+    if (data.length == 0) {
+        vis.errorMessage.attr("opacity", 1);
+    } else {
+        vis.errorMessage.attr("opacity", 0);
+    }
 
     const chartHeight = vis.height - 40;
     const chartWidth = vis.width - 60;
@@ -64,7 +80,7 @@ Causes.prototype.updateVis = function(data) {
         .attr("y", d => y(d.code) + 12)
         .attr("height", y.bandwidth() - 12)
         .attr("width", d => x(d.count))
-        .attr("fill", "steelblue");
+        .attr("fill", "#ccbebe");
 
     bars.exit().remove();
 

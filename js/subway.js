@@ -35,15 +35,18 @@ const RENAMED_STATIONS = {
   "VAUGHAN MC STATION": "VMC STATION"
 };
 
-Subway = function (_parentElement, _subwayDelayData, _codeDescriptions, _topoSubway, 
-                    _topoToronto, _stationCoords, _causesVis) {
+Subway = function (_parentElement, _resetContainerElement, _subwayDelayData, 
+                    _codeDescriptions, _topoSubway, _topoToronto, _stationCoords, 
+                    _causesVis, _legend) {
     this.parentElement = _parentElement;
+    this.resetContainerElement = _resetContainerElement;
     this.subwayDelayData = _subwayDelayData;
     this.codeDescriptions = _codeDescriptions;
     this.topoSubway = _topoSubway;
     this.topoToronto = _topoToronto;
     this.stationCoords = _stationCoords
     this.causesVis = _causesVis;
+    this.legend = _legend;
 
     this.allValidStations = new Set([
         ...VALID_LINE1_STATIONS,
@@ -77,15 +80,6 @@ Subway.prototype.initVis = function () {
         .append("g")
         .attr("transform", `translate(${vis.margin.left},${vis.margin.top})`);
     
-    // title
-    vis.svg.append('g')
-            .attr('class', 'title')
-            .attr('id', 'map-title')
-            .append('text')
-            .text('When and Where is the TTC the most UNRELIABLE?')
-            .attr('transform', `translate(350, 100)`)
-            .attr('text-anchor', 'middle');
-
     // convert topoJSON data to geoJSON data structure
     vis.toronto = topojson.feature(vis.topoToronto, vis.topoToronto.objects.toronto);
     vis.subway = topojson.feature(vis.topoSubway, vis.topoSubway.objects.TTC_SUBWAY_LINES_WGS84);
@@ -94,7 +88,7 @@ Subway.prototype.initVis = function () {
     console.log(vis.subway.features);
 
     vis.projection = d3.geoMercator() // d3.geoStereographic()
-                        .fitExtent([[120, 120], [vis.width - 120, vis.height - 120]], vis.subway);
+                        .fitExtent([[90, 90], [vis.width - 90, vis.height - 90]], vis.subway);
 
     //console.log(vis.projection([-79.38, 43.65]));
 
@@ -108,8 +102,8 @@ Subway.prototype.initVis = function () {
         .enter()
         .append("path")
         .attr("d", vis.path)
-        .attr("fill", "#f5f5f5")
-        .attr("stroke", "#999");
+        .attr("fill", "#f9f9f9")
+        .attr("stroke", "#e2e2e2");
 
     // subway lines
     vis.svg.append("g")
@@ -122,13 +116,13 @@ Subway.prototype.initVis = function () {
         .attr("stroke", d => {
             switch (d.properties.ROUTE_NAME) {
                 case "LINE 1 (YONGE-UNIVERSITY)":
-                    return "yellow";
+                    return "#f7d24a";
                 case "LINE 2 (BLOOR - DANFORTH)":
-                    return "green";
+                    return "#00a64e";
                 case "LINE 3 (SCARBOROUGH)":
-                    return "blue";
+                    return "#0199d9";
                 case "LINE 4 (SHEPPARD)":
-                    return "purple";
+                    return "#b20071";
                 default:
                     return "black";
             }
@@ -204,6 +198,28 @@ Subway.prototype.initVis = function () {
     vis.tooltip = d3.select("body").append('div')
         .attr('class', "tooltip")
         .attr('id', 'stationTooltip');
+
+    // reset button
+    vis.buttonContainer = d3.select("#" + vis.resetContainerElement)
+        .append("div")
+        .style("display", "flex")
+        .style("justify-content", "center")
+        .style("margin", "10px 0");
+    vis.resetButton = vis.buttonContainer.append("button")
+        .text("Reset Visualization")
+        .attr("class", "reset-button")
+        .on("click", () => vis.wrangleData());
+
+    // title
+    vis.svg.append('g')
+        .attr('class', 'title')
+        .attr('id', 'map-title')
+        .append('text')
+        .text('When and Where is the TTC the most UNRELIABLE?')
+        .attr('x', vis.width/2)
+        .attr('y', 50)
+        .attr('text-anchor', 'middle');
+
     
     vis.wrangleData();
 };
@@ -216,7 +232,7 @@ Subway.prototype.initVis = function () {
 Subway.prototype.wrangleData = function () {
     var vis = this;
 
-    console.log(vis.allValidStations);
+    //console.log(vis.allValidStations);
     
     let dayIndex = {
         "Monday": 0,
@@ -281,18 +297,15 @@ Subway.prototype.aggregateData = function(data) {
     );
 
     // merge station data
-    stationStats.forEach((stats, stationKey) => {
-        const coord = vis.stopMap.get(stationKey);
-
-        if (coord) {
-            result.push({
-                station: coord.name,
-                lat: coord.lat,
-                lon: coord.lon,
-                frequency: stats.frequency,
-                avgDelay: stats.avgDelay
-            });
-        }
+    vis.stopMap.forEach((coord, stationKey) => {
+        const stats = stationStats.get(stationKey);
+        result.push({
+            station: coord.name,
+            lat: coord.lat,
+            lon: coord.lon,
+            frequency: stats? stats.frequency : 0,
+            avgDelay: stats? stats.avgDelay : 0
+        });
     });
 
     return result;
@@ -309,12 +322,16 @@ Subway.prototype.updateVis = function () {
     // station circle colour scale
     vis.colorScale = d3.scaleSequential()
                         .domain([d3.max(vis.stationData, d => d.avgDelay), 0])
-                        .interpolator(t => d3.interpolateReds(1 - t))
+                        .interpolator(t => d3.interpolateReds(1 - t)) // #f32002 #810100
                         .clamp(true);
     
     vis.sizeScale = d3.scaleSqrt()
                         .domain([0, d3.max(vis.stationData, d => d.frequency)])
                         .range([3, 15]);
+
+    // update legends
+    vis.legend.drawColorLegend(vis.colorScale);
+    vis.legend.drawSizeLegend(vis.sizeScale);
 
     // draw subway station circles
     const circles = vis.stationLayer

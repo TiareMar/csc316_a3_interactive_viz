@@ -1,7 +1,7 @@
 var subway;
 var causes;
+var legend;
 
-// TODO: Load data 
 let promises = [
     d3.csv("data/ttc-subway-delay-data-since-2025.csv"),
     d3.csv("data/code-descriptions.csv"),
@@ -23,8 +23,10 @@ function initMainPage(data) {
 
     causes = new Causes("side-bottom");
 
-    subway = new Subway("chart-area", subwayDelayData, codeDescriptions, topoSubway, topoToronto,
-                    stationCoords, causes); 
+    legend = new Legend("side-top", subway);
+
+    subway = new Subway("chart-area", "side-top", subwayDelayData, codeDescriptions, topoSubway, topoToronto,
+                    stationCoords, causes, legend); 
 }
 
 
