@@ -61,10 +61,12 @@ Subway = function (_parentElement, _subwayDelayData, _codeDescriptions, _topoSub
 
 Subway.prototype.initVis = function () {
     var vis = this;
-
+    
+    const container = document.getElementById(vis.parentElement);
+    
     vis.margin = { top: 20, right: 20, bottom: 20, left: 20 };
-    vis.height = 1000;
-    vis.width = 1500;
+    vis.width = container.clientWidth;
+    vis.height = container.clientHeight;
 
     vis.svg = d3.select("#" + vis.parentElement).append("svg")
         .attr("width", vis.width)
@@ -72,22 +74,13 @@ Subway.prototype.initVis = function () {
         .append("g")
         .attr("transform", `translate(${vis.margin.left},${vis.margin.top})`);
     
-    // add title
+    // title
     vis.svg.append('g')
             .attr('class', 'title')
             .attr('id', 'map-title')
             .append('text')
             .text('When and Where is the TTC the most UNRELIABLE?')
             .attr('transform', `translate(350, 100)`)
-            .attr('text-anchor', 'middle');
-
-    // add subtitle
-    vis.svg.append('g')
-            .attr('class', 'subtitle')
-            .attr('id', 'map-title')
-            .append('text')
-            .text('Station circle size is delay frequency, and colour is avg. delay duration (red = longer)')
-            .attr('transform', `translate(350, 120)`)
             .attr('text-anchor', 'middle');
 
     // convert topoJSON data to geoJSON data structure
@@ -97,16 +90,15 @@ Subway.prototype.initVis = function () {
     console.log(vis.toronto.features);
     console.log(vis.subway.features);
 
-    // create projection
     vis.projection = d3.geoMercator() // d3.geoStereographic()
-                        .fitSize([vis.width, vis.height], vis.toronto);
+                        .fitExtent([[120, 120], [vis.width - 120, vis.height - 120]], vis.subway);
 
     //console.log(vis.projection([-79.38, 43.65]));
 
     // define geo generator and pass projection to it
     vis.path = d3.geoPath().projection(vis.projection);
 
-    // draw toronto map as backgorund
+    // toronto map as backgorund
     vis.svg.append("g")
         .selectAll("path")
         .data(vis.toronto.features)
@@ -116,7 +108,7 @@ Subway.prototype.initVis = function () {
         .attr("fill", "#f5f5f5")
         .attr("stroke", "#999");
 
-    // draw subway lines
+    // subway lines
     vis.svg.append("g")
         .selectAll("path")
         .data(vis.subway.features)
@@ -145,7 +137,7 @@ Subway.prototype.initVis = function () {
 
     // FOR WEEK DAY + TIME FILTERING
     vis.timeScale = d3.scaleLinear()
-                    .domain([0, 168])
+                    .domain([0, 167])
                     .range([100, vis.width - 100]);
     // slider track line
     vis.sliderTrack = vis.svg.append("line")
@@ -157,9 +149,9 @@ Subway.prototype.initVis = function () {
                         .attr("stroke-width", 2);
     // draggable circle for weekday
     vis.sliderHandle = vis.svg.append("circle")
-                        .attr("cx", vis.timeScale(1))
+                        .attr("cx", vis.timeScale(0))
                         .attr("cy", vis.height - 50)
-                        .attr("r", 20)
+                        .attr("r", 10)
                         .attr("fill", "black")
                         .call(d3.drag().on("drag", function(event) {
                             let x = Math.max(100, Math.min(vis.width - 100, event.x));
@@ -174,26 +166,24 @@ Subway.prototype.initVis = function () {
                             vis.updateTimeFilter(selectedTime);
                         }))
                         .on("mouseover", function() {
-                            d3.select(this).attr("r", 25);
+                            d3.select(this).attr("r", 15);
                         })
                         .on("mouseout", function() {
-                            d3.select(this).attr("r", 20);
+                            d3.select(this).attr("r", 10);
                         });
     
     // label for weekday and time
     vis.timeLabel = vis.svg.append("text")
-                        .attr("x", vis.timeScale(1))
+                        .attr("x", vis.timeScale(0))
                         .attr("y", vis.height - 90)
                         .attr("class", "subtitle")
                         .attr("text-anchor", "middle")
-                        .text(formatTime(1));
+                        .text(formatTime(0));
     
     // append tooltip
     vis.tooltip = d3.select("body").append('div')
         .attr('class', "tooltip")
         .attr('id', 'stationTooltip');
-        
-
     
     vis.wrangleData();
 };
@@ -289,7 +279,7 @@ Subway.prototype.updateVis = function () {
     // station circle colour scale
     vis.colorScale = d3.scaleSequential()
                         .domain([d3.max(vis.stationData, d => d.avgDelay), 0])
-                        .interpolator(d3.interpolateRdYlGn)
+                        .interpolator(t => d3.interpolateReds(1 - t))
                         .clamp(true);
     
     vis.sizeScale = d3.scaleSqrt()
@@ -388,10 +378,16 @@ function readifyStationName(name) {
 }
 
 function formatTime(t) {
-    const day = Math.floor(t / 24);
-    const hour = Math.floor(t % 12);
+    let day = Math.floor(t / 24);
+    let hour = Math.floor(t % 24);
 
-    const days = ["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"];
+    let days = ["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"];
 
-    return `${days[day]} ${hour}:00 ${(t % 24 > 12) ? "PM" : "AM"}`;
+    let amPM = hour >= 12 ? "PM" : "AM";
+    let hour12 = hour % 12;
+    if (hour12 === 0) {
+        hour12 = 12;
+    }
+
+    return `${days[day]} ${hour12}:00 ${amPM}`;
 }
