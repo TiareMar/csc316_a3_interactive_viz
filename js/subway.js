@@ -280,6 +280,8 @@ Subway.prototype.wrangleData = function () {
     const globalCauses = vis.getTop5DelayCauses(vis.cleanedDelays);
     vis.causesVis.updateVis(globalCauses);
 
+    vis.currentFilteredData = vis.cleanedDelays;
+
     vis.updateVis();
 };
 
@@ -372,7 +374,7 @@ Subway.prototype.updateVis = function () {
                 .on('mouseout', function() {
                     vis.tooltip.style("opacity", 0);
 
-                    const globalCauses = vis.getTop5DelayCauses(vis.cleanedDelays);
+                    const globalCauses = vis.getTop5DelayCauses(vis.currentFilteredData || vis.cleanedDelays);
                     vis.causesVis.updateVis(globalCauses);
                 })
                 .transition()
