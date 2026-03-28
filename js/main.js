@@ -1,4 +1,5 @@
 var subway;
+var causes;
 
 // TODO: Load data 
 let promises = [
@@ -20,9 +21,10 @@ function initMainPage(data) {
     let topoToronto = data[3];
     let stationCoords = data[4];
 
+    causes = new Causes("side-bottom");
+
     subway = new Subway("chart-area", subwayDelayData, codeDescriptions, topoSubway, topoToronto,
-                    stationCoords, VALID_LINE1_STATIONS, VALID_LINE2_STATIONS, VALID_LINE4_STATIONS,
-                    RENAMED_STATIONS); 
+                    stationCoords, causes); 
 }
 
 

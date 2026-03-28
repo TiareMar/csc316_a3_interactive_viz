@@ -51,6 +51,6 @@ path {
 .subtitle {
   font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
   font-size: 14px;
-  fill: #666;
+  fill: black;
   text-anchor: middle;
 }

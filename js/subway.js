@@ -36,13 +36,14 @@ const RENAMED_STATIONS = {
 };
 
 Subway = function (_parentElement, _subwayDelayData, _codeDescriptions, _topoSubway, 
-                    _topoToronto, _stationCoords) {
+                    _topoToronto, _stationCoords, _causesVis) {
     this.parentElement = _parentElement;
     this.subwayDelayData = _subwayDelayData;
     this.codeDescriptions = _codeDescriptions;
     this.topoSubway = _topoSubway;
     this.topoToronto = _topoToronto;
-    this.stationCoords = _stationCoords;
+    this.stationCoords = _stationCoords
+    this.causesVis = _causesVis;
 
     this.allValidStations = new Set([
         ...VALID_LINE1_STATIONS,
@@ -61,6 +62,8 @@ Subway = function (_parentElement, _subwayDelayData, _codeDescriptions, _topoSub
 
 Subway.prototype.initVis = function () {
     var vis = this;
+
+    console.log("causes:", vis.causesVis);
     
     const container = document.getElementById(vis.parentElement);
     
@@ -139,6 +142,23 @@ Subway.prototype.initVis = function () {
     vis.timeScale = d3.scaleLinear()
                     .domain([0, 167])
                     .range([100, vis.width - 100]);
+
+    let days = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+    let dayPositions = d3.range(0, 168, 24);
+
+    // slider day lines
+    vis.svg.append("g")
+        .selectAll("line")
+        .data(dayPositions)
+        .enter()
+        .append("line")
+        .attr("x1", d => vis.timeScale(d))
+        .attr("x2", d => vis.timeScale(d))
+        .attr("y1", vis.height - 55)
+        .attr("y2", vis.height - 45)
+        .attr("stroke", "black")
+        .attr("stroke-width", 1);
+        
     // slider track line
     vis.sliderTrack = vis.svg.append("line")
                         .attr("x1", 100)
@@ -161,7 +181,7 @@ Subway.prototype.initVis = function () {
                             console.log("Selected time:", selectedTime);
                             vis.timeLabel
                                 .attr("x", x)
-                                .attr("y", vis.height - 90)
+                                .attr("y", vis.height - 75)
                                 .text(formatTime(selectedTime));
                             vis.updateTimeFilter(selectedTime);
                         }))
@@ -172,14 +192,14 @@ Subway.prototype.initVis = function () {
                             d3.select(this).attr("r", 10);
                         });
     
-    // label for weekday and time
+    // label for weekday and time ON TOP OF SLIDER
     vis.timeLabel = vis.svg.append("text")
                         .attr("x", vis.timeScale(0))
-                        .attr("y", vis.height - 90)
+                        .attr("y", vis.height - 75)
                         .attr("class", "subtitle")
                         .attr("text-anchor", "middle")
                         .text(formatTime(0));
-    
+        
     // append tooltip
     vis.tooltip = d3.select("body").append('div')
         .attr('class', "tooltip")
@@ -207,12 +227,12 @@ Subway.prototype.wrangleData = function () {
         "Saturday": 5,
         "Sunday": 6
     };
+
+    // remove rows without valid station names & add time data for filtering
     vis.cleanedDelays = vis.subwayDelayData
                         .filter(d => d.Station && d.Station !== "None")
-                        // remove rows without valid station names
                         .filter(d => vis.allValidStations.has(renameInvalidStations(d.Station)))
                         .map(d => {
-                            // and add filterable time data
                             let [hour, min] = d.Time.split(":").map(Number);
                             let hourDecimal = hour + min / 60;
 
@@ -233,7 +253,17 @@ Subway.prototype.wrangleData = function () {
         }
     ]));
 
+    // map for delay cause
+    vis.codeMap = new Map(
+        vis.codeDescriptions.map(d => [d.CODE, d.DESCRIPTION])
+    );
+
     vis.stationData = vis.aggregateData(vis.cleanedDelays);
+
+    // causes vis
+    const globalCauses = vis.getTop5DelayCauses(vis.cleanedDelays);
+    vis.causesVis.updateVis(globalCauses);
+
     vis.updateVis();
 };
 
@@ -304,14 +334,18 @@ Subway.prototype.updateVis = function () {
     circlesEnter.merge(circles)
                 .on('mouseover', function(event, d) {
                     vis.tooltip
-                        .style("opacity", 1)
-                        .html(`
+                    .style("opacity", 1)
+                    .html(`
                         <div style="border:1px solid grey; border-radius:5px; background:white; padding:8px">
-                            <strong>${readifyStationName(d.station)}</strong><br/>
-                            Avg Delay: ${d.avgDelay.toFixed(1)} min<br/>
-                            Frequency: ${d.frequency}
+                        <strong>${readifyStationName(d.station)}</strong><br/>
+                        Avg Delay: ${d.avgDelay.toFixed(1)} min<br/>
+                        Frequency: ${d.frequency}
                         </div>
-                        `);
+                    `);
+
+                    const stationCauses = vis.getTop5DelayCauses(vis.currentFilteredData || vis.cleanedDelays,
+                                                readifyStationName(d.station) );
+                    vis.causesVis.updateVis(stationCauses);
                 })
                 .on('mousemove', function(event) {
                     vis.tooltip
@@ -320,6 +354,9 @@ Subway.prototype.updateVis = function () {
                 })
                 .on('mouseout', function() {
                     vis.tooltip.style("opacity", 0);
+
+                    const globalCauses = vis.getTop5DelayCauses(vis.cleanedDelays);
+                    vis.causesVis.updateVis(globalCauses);
                 })
                 .transition()
                 .duration(0)
@@ -328,7 +365,6 @@ Subway.prototype.updateVis = function () {
 
     // EXIT
     circles.exit().remove();
-
 };
 
 Subway.prototype.filterData = function(selectedTime) {
@@ -348,12 +384,16 @@ Subway.prototype.updateTimeFilter = function(selectedTime) {
 
     const filtered = vis.filterData(selectedTime);
     vis.stationData = vis.aggregateData(filtered);
+    vis.currentFilteredData = filtered;
 
     console.log("Filtered size:", filtered.length);
 
     // update scales dynamically
-    vis.colorScale.domain([d3.max(vis.stationData, d => d.avgDelay),0]);
-    vis.sizeScale.domain([0,d3.max(vis.stationData, d => d.frequency)]);
+    // vis.colorScale.domain([d3.max(vis.stationData, d => d.avgDelay),0]);
+    // vis.sizeScale.domain([0,d3.max(vis.stationData, d => d.frequency)]);
+
+    const topCauses = vis.getTop5DelayCauses(filtered);
+    vis.causesVis.updateVis(topCauses);
 
     vis.updateVis();
 };
@@ -391,3 +431,27 @@ function formatTime(t) {
 
     return `${days[day]} ${hour12}:00 ${amPM}`;
 }
+
+Subway.prototype.getTop5DelayCauses = function(data, stationName = null) {
+    var vis = this;
+
+    let filtered;
+    if (stationName) {
+        const target = readifyStationName(stationName);
+        filtered = data.filter(d => readifyStationName(d.Station) === target);
+    } else {
+        filtered = data;
+    }
+
+    const counts = d3.rollup(filtered, v => v.length, d => d.Code);
+
+    let result = Array.from(counts, ([code, count]) => ({
+        code,
+        description: vis.codeMap.get(code) || code,
+        count
+    }));
+
+    return result
+        .sort((a, b) => d3.descending(a.count, b.count))
+        .slice(0, 5);
+};
