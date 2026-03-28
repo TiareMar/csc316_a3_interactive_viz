@@ -38,7 +38,7 @@ Legend.prototype.initVis = function() {
         .attr("y", 55)
         .attr("text-anchor", "middle")
         .attr("font-size", "12px")
-        .text("Data from taken from the Toronto Open Data Portal.");
+        .text("Data taken from the Toronto Open Data Portal.");
 
     vis.svg.append('g')
         .append('text')

@@ -322,7 +322,7 @@ Subway.prototype.updateVis = function () {
     // station circle colour scale
     vis.colorScale = d3.scaleSequential()
                         .domain([d3.max(vis.stationData, d => d.avgDelay), 0])
-                        .interpolator(t => d3.interpolateReds(1 - t)) // #f32002 #810100
+                        .interpolator(t => d3.interpolateReds(1 - t)) 
                         .clamp(true);
     
     vis.sizeScale = d3.scaleSqrt()
